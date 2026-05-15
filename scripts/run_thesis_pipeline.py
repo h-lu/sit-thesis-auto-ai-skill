@@ -160,6 +160,11 @@ def summarize_issues(report: dict[str, Any]) -> list[str]:
         issues.append(f"validation_error:{error}")
     for warning in validation.get("warnings", []):
         issues.append(f"validation_warning:{warning}")
+    word = report.get("word_extraction") or {}
+    if word.get("omml_unconverted", 0):
+        issues.append(f"word_omml_unconverted:{word.get('omml_unconverted')}")
+    if word.get("omml_errors"):
+        issues.append(f"word_omml_errors:{len(word.get('omml_errors') or [])}")
     conversion = report.get("conversion") or {}
     for warning in conversion.get("warnings", []):
         # “表格可能较宽，已启用自动换行列”是转换器已经采取的自动排版措施，
@@ -192,6 +197,7 @@ def write_ai_review(report: dict[str, Any], path: Path) -> None:
     log = report.get("latex_log") or {}
     conversion = report.get("conversion") or {}
     validation = report.get("validation") or {}
+    word = report.get("word_extraction") or {}
 
     lines: list[str] = [
         "# AI 版面检查交接",
@@ -243,6 +249,19 @@ def write_ai_review(report: dict[str, Any], path: Path) -> None:
     add_samples("缺字样本", "missing_chars")
     add_samples("正文 Overfull 样本", "paragraph_overfull_hbox")
     add_samples("表格类 Overfull 样本", "table_like_overfull_hbox")
+
+    if word:
+        lines.extend(["", "## Word 公式抽取", ""])
+        lines.append(f"- OMML 公式：{word.get('omml_count', 0)}")
+        lines.append(f"- 已转 LaTeX：{word.get('omml_converted', 0)}")
+        if word.get("omml_unconverted", 0):
+            lines.append(f"- 未转换：{word.get('omml_unconverted')}（必须人工检查）")
+        if word.get("omml_errors"):
+            lines.append("- 错误：")
+            lines.extend(f"  - {e}" for e in word["omml_errors"][:50])
+        unsupported = word.get("omml_unsupported_tags") or {}
+        if unsupported:
+            lines.append("- 未完全识别的 OMML 标签：" + ", ".join(f"{k}×{v}" for k, v in sorted(unsupported.items())))
 
     refs = report.get("references_gb7714_2005") or {}
     if refs:
@@ -326,6 +345,9 @@ def main() -> None:
         if input_path != standard_md:
             standard_md.write_text(input_path.read_text(encoding="utf-8"), encoding="utf-8")
         report["stages"].append(StageResult("copy_standard_md", [], 0, 0.0, "", "").__dict__)
+
+    if input_type == "word":
+        report["word_extraction"] = load_json(standard_md.with_suffix(".report.json"))
 
     if report["stages"][-1]["returncode"] == 0:
         gb_report_path = output_dir.parent / f"{output_dir.name}.gb7714-2005-report.json"

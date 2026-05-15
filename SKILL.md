@@ -38,9 +38,20 @@ python scripts/auto_thesis.py thesis.docx --output build/thesis-latex --compile
 
 - `scripts/auto_thesis.py`：唯一推荐入口。
 - `scripts/run_thesis_pipeline.py`：自动流水线。
-- `scripts/word_to_standard_md.py`：Word 抽取。
+- `scripts/word_to_standard_md.py`：Word 抽取，含 OMML/Office Math 公式提取。
+- `scripts/omml_to_latex.py`：Word 原生公式转 LaTeX。
 - `scripts/md_to_latex.py`：Markdown 转 LaTeX。
 - `assets/sit-latex-thesis-template/sithesis.cls`：LaTeX 模板。
+
+## Word 原生数学公式
+
+流水线会在 Word 抽取阶段处理 OMML/Office Math：
+
+- 段落中的行内公式转换为 `$...$`。
+- 独立显示公式转换为 `$$...$$`，再由 LaTeX 阶段渲染为 equation。
+- 表格单元格中的公式也会转换。
+- 报告会写入 `omml_count`、`omml_converted`、`omml_unconverted`、`omml_errors`。
+- 若检测到公式但未能转换，流水线会在报告里标出，不能静默丢失。
 
 ## 参考文献 GB/T 7714-2005
 

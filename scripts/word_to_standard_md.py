@@ -6,7 +6,7 @@ DOCX -> SIT-Thesis-MD v2 初步标准论文 Markdown。
 设计原则：
 - Word 只做内容抽取，不保留 Word 分页造成的手工续表。
 - 表格以“逻辑表”输出；若 Word 把同一表拆成续表，脚本按表号/表头合并。
-- 图、表、公式先尽量保留；复杂 Office Math 建议用 Pandoc/OMML 转 TeX 后再校对。
+- 图、表、公式先尽量保留；Word 原生 Office Math(OMML) 会转换为 LaTeX。
 """
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ from docx.oxml.table import CT_Tbl
 from docx.oxml.text.paragraph import CT_P
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+
+from omml_to_latex import OmmlConversionStats, OmmlToLatex, iter_omath_elements, local_name
 
 
 @dataclass
@@ -63,12 +65,64 @@ def extract_images(docx_path: Path, figures_dir: Path) -> dict[str, str]:
 
 
 def count_omml(docx_path: Path) -> int:
+    """Count actual OMML equation objects in document.xml.
+
+    ``m:oMathPara`` is only a display container and usually contains one or more
+    ``m:oMath`` elements, so counting both would double count display equations.
+    """
     with zipfile.ZipFile(docx_path) as zf:
         try:
-            xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+            xml = zf.read("word/document.xml")
         except KeyError:
             return 0
-    return len(re.findall(r"<m:oMath\b", xml)) + len(re.findall(r"<m:oMathPara\b", xml))
+    try:
+        from lxml import etree
+        root = etree.fromstring(xml)
+        return sum(1 for _ in iter_omath_elements(root))
+    except Exception:
+        text = xml.decode("utf-8", errors="ignore")
+        return len(re.findall(r"<m:oMath\b", text))
+
+
+def word_text_from_element(el) -> str:
+    """Extract visible text from a Word XML element without touching OMML."""
+    name = local_name(el)
+    if name == "t":
+        return el.text or ""
+    if name == "tab":
+        return "\t"
+    if name in {"br", "cr"}:
+        return "\n"
+    if name in {"drawing", "pict"}:
+        return ""
+    return "".join(word_text_from_element(c) for c in el)
+
+
+def paragraph_text_with_math(paragraph: Paragraph, stats: OmmlConversionStats) -> str:
+    """Return paragraph text while converting inline/display OMML to LaTeX.
+
+    python-docx's ``Paragraph.text`` drops Office Math objects, so we traverse the
+    underlying XML in order. Inline ``m:oMath`` becomes ``$...$``; display
+    ``m:oMathPara`` becomes ``$$...$$``.
+    """
+    converter = OmmlToLatex(stats)
+    parts: List[str] = []
+    for child in paragraph._p.iterchildren():
+        name = local_name(child)
+        if name == "oMath":
+            tex = converter.convert_element(child)
+            if tex:
+                parts.append(f"${tex}$")
+        elif name == "oMathPara":
+            tex = converter.convert_element(child)
+            if tex:
+                parts.append(f"$$\n{tex}\n$$")
+        elif name in {"r", "hyperlink", "smartTag", "sdt"}:
+            parts.append(word_text_from_element(child))
+        else:
+            # pPr/bookmarks/proofErr etc. are not visible text.
+            continue
+    return "".join(parts).strip()
 
 
 def image_refs_in_paragraph(paragraph: Paragraph, relmap: dict[str, str], used: set[str]) -> List[str]:
@@ -120,10 +174,16 @@ def normalize_row(row: List[str], n: int) -> List[str]:
     return row
 
 
-def table_to_rows(table: Table) -> List[List[str]]:
+def cell_text_with_math(cell, stats: OmmlConversionStats) -> str:
+    parts = [paragraph_text_with_math(p, stats) for p in cell.paragraphs]
+    return " ".join(p for p in parts if p).strip()
+
+
+def table_to_rows(table: Table, stats: OmmlConversionStats | None = None) -> List[List[str]]:
+    stats = stats or OmmlConversionStats()
     rows: List[List[str]] = []
     for row in table.rows:
-        rows.append([cell.text.strip().replace("\n", " ") for cell in row.cells])
+        rows.append([cell_text_with_math(cell, stats).replace("\n", " ") for cell in row.cells])
     # 去掉 Word 合并单元格可能产生的完全重复空行。
     return [r for r in rows if any(c.strip() for c in r)]
 
@@ -453,6 +513,7 @@ def main() -> None:
     figures_dir = args.assets or (args.output.parent / "figures")
     relmap = extract_images(args.docx, figures_dir)
     omml_count = count_omml(args.docx)
+    math_stats = OmmlConversionStats()
     doc = Document(args.docx)
 
     meta = {
@@ -487,7 +548,7 @@ def main() -> None:
 
     for block in iter_block_items(doc):
         if isinstance(block, Paragraph):
-            text = block.text.strip()
+            text = paragraph_text_with_math(block, math_stats)
             for src in image_refs_in_paragraph(block, relmap, used_images):
                 if not meta["logo"] and img_counter == 1:
                     meta["logo"] = src
@@ -522,7 +583,7 @@ def main() -> None:
                 items.append(text)
             items.append("")
         elif isinstance(block, Table):
-            rows = table_to_rows(block)
+            rows = table_to_rows(block, math_stats)
             if not rows:
                 pending_caption = ""
                 continue
@@ -555,16 +616,20 @@ def main() -> None:
         "source": str(args.docx),
         "images": len(relmap),
         "omml_count": omml_count,
+        "omml_converted": math_stats.converted,
+        "omml_unconverted": max(0, omml_count - math_stats.converted),
+        "omml_unsupported_tags": math_stats.unsupported_tags,
+        "omml_errors": math_stats.errors,
         "merged_continuation_tables": merged_count,
         "notes": [
             "本脚本用于初步抽取，封面字段、摘要字段和图表 caption 仍建议校对。",
             "Word 中手工拆开的续表已尽量合并为单个逻辑 table 块；Markdown 中不应保留续表块。",
-            "若 omml_count > 0，建议使用 Pandoc 或 OMML 转 TeX 工具把公式转为 $...$ / $$...$$。",
+            "Word 原生公式(OMML)会转换为 LaTeX；若 omml_unconverted > 0 或 omml_errors 非空，必须人工检查对应公式。",
         ],
     }
     (args.output.with_suffix(".report.json")).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"已生成：{args.output}")
-    print(f"图片数量：{len(relmap)}；OMML 公式数量：{omml_count}；合并续表：{merged_count}")
+    print(f"图片数量：{len(relmap)}；OMML 公式数量：{omml_count}；已转换：{math_stats.converted}；合并续表：{merged_count}")
 
 
 if __name__ == "__main__":
