@@ -147,6 +147,19 @@
 % 元数据命令
 % ---------------------------
 \makeatletter
+
+% 双面打印：所有结构性起始页使用 \cleardoublepage，必要时自动补空白页，
+% 确保目录、正文起始、致谢/参考文献等从奇数页（右页）开始；普通章节只另起新页。
+\def\cleardoublepage{%
+  \clearpage
+  \if@twoside
+    \ifodd\c@page
+    \else
+      \thispagestyle{empty}\hbox{}\newpage
+      \if@twocolumn\thispagestyle{empty}\hbox{}\newpage\fi
+    \fi
+  \fi
+}
 \newcommand{\sit@title}{毕业设计（论文）题目}
 \newcommand{\sit@shorttitle}{毕业设计（论文）题目}
 \newcommand{\sit@englishtitle}{Language Learning}
@@ -261,7 +274,7 @@
   {\titlerule*[0.5pc]{.}\contentspage}
 
 \newcommand{\maketableofcontents}{%
-  \clearpage
+  \cleardoublepage
   \phantomsection
   \thispagestyle{sitfront}%
   \begin{center}
@@ -269,7 +282,7 @@
   \end{center}
   \vspace{1\baselineskip}
   \@starttoc{toc}%
-  \clearpage
+  \cleardoublepage
 }
 
 % ---------------------------
@@ -344,14 +357,14 @@
     \sit@coverline{起止日期}{\sit@period}
     \vfill
   \end{titlepage}
-  \clearpage
+  \cleardoublepage
 }
 
 % ---------------------------
 % 前置部分与正文部分
 % ---------------------------
 \newcommand{\frontmatter}{%
-  \clearpage
+  \cleardoublepage
   \sit@mainmatterfalse
   \pagenumbering{Roman}%
   \setcounter{page}{1}%
@@ -359,7 +372,7 @@
 }
 
 \newcommand{\mainmatter}{%
-  \clearpage
+  \cleardoublepage
   \sit@mainmattertrue
   \pagenumbering{arabic}%
   \setcounter{page}{1}%
@@ -370,7 +383,7 @@
 % 独创性声明
 % ---------------------------
 \newcommand{\makedeclaration}{%
-  \clearpage
+  \cleardoublepage
   \thispagestyle{sitfront}%
   \begin{center}
     {\zihao{3}\heiti 毕业设计（论文）独创性声明}
@@ -385,14 +398,14 @@
     \vspace{0.8\baselineskip}
     日\quad 期：\makebox[4.0cm][l]{}\par
   \end{flushright}}
-  \clearpage
+  \cleardoublepage
 }
 
 % ---------------------------
 % 中英文摘要
 % ---------------------------
 \newenvironment{cnabstract}{%
-  \clearpage
+  \cleardoublepage
   \thispagestyle{sitfront}%
   \begin{center}
     {\zihao{-2}\heiti\bfseries \sit@title}
@@ -417,7 +430,7 @@
 
 \newcommand{\enkeywords}[1]{%
   \par\vspace{1\baselineskip}
-  \noindent{\bfseries KeyWords:}\rmfamily\hspace{1em}#1\par\clearpage
+  \noindent{\bfseries KeyWords:}\rmfamily\hspace{1em}#1\par\cleardoublepage
 }
 
 % ---------------------------
@@ -434,7 +447,7 @@
 % 致谢、参考文献、附录
 % ---------------------------
 \newenvironment{acknowledgements}{%
-  \clearpage
+  \cleardoublepage
   \phantomsection
   \addcontentsline{toc}{section}{致\quad 谢}%
   {\centering\zihao{-2}\heiti\bfseries 致\quad 谢\par}
@@ -444,7 +457,7 @@
 
 \renewcommand{\refname}{参考文献}
 \renewenvironment{thebibliography}[1]{%
-  \clearpage
+  \cleardoublepage
   \phantomsection
   \addcontentsline{toc}{section}{参考文献}%
   \begin{center}{\zihao{-2}\heiti\bfseries 参考文献}\end{center}
@@ -467,7 +480,7 @@
 }
 
 \newenvironment{appendixmaterial}{%
-  \clearpage
+  \cleardoublepage
   \phantomsection
   \addcontentsline{toc}{section}{附\quad 录}%
   \begin{center}{\zihao{-2}\heiti\bfseries 附\quad 录}\end{center}
