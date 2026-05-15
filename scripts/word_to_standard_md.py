@@ -84,6 +84,24 @@ def count_omml(docx_path: Path) -> int:
         return len(re.findall(r"<m:oMath\b", text))
 
 
+
+EQUATION_TAG_RE = re.compile(r"^\s*[（(]?\s*([0-9]+(?:[.\-—–][0-9]+)*|[A-Za-z]?[0-9]+)\s*[）)]?\s*$")
+
+
+def parse_equation_tag(text: str) -> str:
+    """Return Word-visible equation number text, without surrounding parens."""
+    m = EQUATION_TAG_RE.match(text.strip())
+    return m.group(1).strip() if m else ""
+
+
+def equation_block_markdown(tex: str, tag: str = "") -> str:
+    lines = ["::: equation"]
+    if tag:
+        lines.append(f"tag: {tag}")
+    lines.append(tex.strip())
+    lines.append(":::")
+    return "\n".join(lines)
+
 def word_text_from_element(el) -> str:
     """Extract visible text from a Word XML element without touching OMML."""
     name = local_name(el)
@@ -98,30 +116,50 @@ def word_text_from_element(el) -> str:
     return "".join(word_text_from_element(c) for c in el)
 
 
-def paragraph_text_with_math(paragraph: Paragraph, stats: OmmlConversionStats) -> str:
-    """Return paragraph text while converting inline/display OMML to LaTeX.
+def paragraph_text_with_math(paragraph: Paragraph, stats: OmmlConversionStats, *, force_inline: bool = False) -> str:
+    """Return paragraph text while converting OMML to LaTeX.
 
-    python-docx's ``Paragraph.text`` drops Office Math objects, so we traverse the
-    underlying XML in order. Inline ``m:oMath`` becomes ``$...$``; display
-    ``m:oMathPara`` becomes ``$$...$$``.
+    Policy for Word consistency:
+    - inline formulas inside ordinary text stay inline as ``$...$``;
+    - a standalone Word formula becomes an explicit equation block;
+    - if Word shows a visible number next to the formula, preserve that exact
+      number as ``tag`` instead of letting LaTeX auto-number.
     """
     converter = OmmlToLatex(stats)
-    parts: List[str] = []
+    tokens: List[tuple[str, str]] = []
     for child in paragraph._p.iterchildren():
         name = local_name(child)
         if name == "oMath":
             tex = converter.convert_element(child)
             if tex:
-                parts.append(f"${tex}$")
+                tokens.append(("math_inline", tex))
         elif name == "oMathPara":
             tex = converter.convert_element(child)
             if tex:
-                parts.append(f"$$\n{tex}\n$$")
+                tokens.append(("math_display", tex))
         elif name in {"r", "hyperlink", "smartTag", "sdt"}:
-            parts.append(word_text_from_element(child))
+            txt = word_text_from_element(child)
+            if txt:
+                tokens.append(("text", txt))
         else:
-            # pPr/bookmarks/proofErr etc. are not visible text.
             continue
+
+    math_tokens = [(typ, val) for typ, val in tokens if typ.startswith("math_")]
+    text = "".join(val for typ, val in tokens if typ == "text").strip()
+
+    # Standalone formula with optional visible Word number, e.g. formula + “(2-1)”.
+    # Table cells are rendered as table cells, so keep their formulas inline.
+    if not force_inline and len(math_tokens) == 1 and (not text or parse_equation_tag(text)):
+        return equation_block_markdown(math_tokens[0][1], parse_equation_tag(text))
+
+    parts: List[str] = []
+    for typ, val in tokens:
+        if typ == "math_inline":
+            parts.append(f"${val}$")
+        elif typ == "math_display":
+            parts.append(equation_block_markdown(val))
+        else:
+            parts.append(val)
     return "".join(parts).strip()
 
 
@@ -175,7 +213,7 @@ def normalize_row(row: List[str], n: int) -> List[str]:
 
 
 def cell_text_with_math(cell, stats: OmmlConversionStats) -> str:
-    parts = [paragraph_text_with_math(p, stats) for p in cell.paragraphs]
+    parts = [paragraph_text_with_math(p, stats, force_inline=True) for p in cell.paragraphs]
     return " ".join(p for p in parts if p).strip()
 
 

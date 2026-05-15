@@ -57,6 +57,7 @@ class TableBlock:
 class EquationBlock:
     body: str
     label: str = ""
+    tag: str = ""
 
 
 @dataclass
@@ -676,14 +677,18 @@ class BlockConverter:
 
     def parse_equation_block(self, lines: List[str]) -> EquationBlock:
         label = ""
+        tag = ""
         body_lines: List[str] = []
         for line in lines:
             if not body_lines and (line.startswith("label:") or line.startswith("label：")):
                 _, label = re.split(r"[:：]", line, maxsplit=1)
                 label = label.strip()
+            elif not body_lines and (line.startswith("tag:") or line.startswith("tag：")):
+                _, tag = re.split(r"[:：]", line, maxsplit=1)
+                tag = tag.strip().strip("()（）")
             else:
                 body_lines.append(line)
-        return EquationBlock("\n".join(body_lines).strip(), label=label)
+        return EquationBlock("\n".join(body_lines).strip(), label=label, tag=tag)
 
     def render_figure(self, fig: FigureBlock) -> str:
         if not fig.src:
@@ -829,11 +834,15 @@ class BlockConverter:
         return "\n".join(out)
 
     def render_equation(self, eq: EquationBlock) -> str:
-        self.report["equations"].append({"label": eq.label, "chars": len(eq.body)})
-        out = [r"\begin{equation}", eq.body]
+        self.report["equations"].append({"label": eq.label, "tag": eq.tag, "chars": len(eq.body)})
+        # Preserve Word numbering exactly: no visible Word number -> no LaTeX auto-number.
+        env = "equation" if eq.tag else "equation*"
+        out = [rf"\begin{{{env}}}", eq.body]
+        if eq.tag:
+            out.append(r"  \tag{" + self.inline.convert(eq.tag, break_long_tokens=False) + "}")
         if eq.label:
             out.append(r"  \label{" + eq.label + "}")
-        out.append(r"\end{equation}")
+        out.append(rf"\end{{{env}}}")
         return "\n".join(out)
 
 

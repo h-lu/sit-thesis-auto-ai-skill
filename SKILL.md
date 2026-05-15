@@ -48,8 +48,9 @@ python scripts/auto_thesis.py thesis.docx --output build/thesis-latex --compile
 流水线会在 Word 抽取阶段处理 OMML/Office Math：
 
 - 段落中的行内公式转换为 `$...$`。
-- 独立显示公式转换为 `$$...$$`，再由 LaTeX 阶段渲染为 equation。
-- 表格单元格中的公式也会转换。
+- 独立显示公式转换为 equation；Word 没有编号则用 `equation*`，不自动编号。
+- Word 里可见的公式编号如 `（2-1）` / `(3.2)` 会原样写成 `\tag{2-1}` / `\tag{3.2}`。
+- 表格单元格中的公式保持为单元格内行内公式。
 - 报告会写入 `omml_count`、`omml_converted`、`omml_unconverted`、`omml_errors`。
 - 若检测到公式但未能转换，流水线会在报告里标出，不能静默丢失。
 

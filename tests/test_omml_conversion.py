@@ -61,6 +61,16 @@ def make_docx(path: Path) -> None:
         )
     )
 
+    p = doc.add_paragraph()
+    p._p.append(
+        etree.fromstring(
+            f'''<m:oMathPara xmlns:m="{NS['m']}" xmlns:w="{NS['w']}">
+              <m:oMath><m:f><m:num>{r('E')}</m:num><m:den>{r('mc')}</m:den></m:f></m:oMath>
+            </m:oMathPara>'''.encode("utf-8")
+        )
+    )
+    p.add_run("（2-1）")
+
     table = doc.add_table(rows=2, cols=2)
     table.cell(0, 0).text = "变量"
     table.cell(0, 1).text = "公式"
@@ -123,15 +133,17 @@ class OmmlConversionTest(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("已转换：3", proc.stdout)
+            self.assertIn("已转换：4", proc.stdout)
             md = out.read_text(encoding="utf-8")
             self.assertIn(r"$\frac{a + b}{c}$", md)
-            self.assertIn("$$", md)
+            self.assertIn("::: equation", md)
             self.assertIn(r"{x}^{2}", md)
+            self.assertIn("tag: 2-1", md)
+            self.assertIn(r"\frac{E}{mc}", md)
             self.assertIn(r"$\sqrt{x}$", md)
             report = json.loads(out.with_suffix(".report.json").read_text(encoding="utf-8"))
-            self.assertEqual(report["omml_count"], 3)
-            self.assertEqual(report["omml_converted"], 3)
+            self.assertEqual(report["omml_count"], 4)
+            self.assertEqual(report["omml_converted"], 4)
             self.assertEqual(report["omml_unconverted"], 0)
             self.assertFalse(report["omml_errors"])
 
