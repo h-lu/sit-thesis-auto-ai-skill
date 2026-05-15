@@ -300,6 +300,10 @@ class InlineConverter:
             return self._hold(num + r".\,")
         text = re.sub(r"[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]", circled_repl, text)
 
+        # Windows 宋体/黑体子集常不含箭头符号；映射为 TeX 数学符号以避免缺字。
+        arrow_map = {"→": r"$\rightarrow$", "←": r"$\leftarrow$", "↔": r"$\leftrightarrow$", "⇒": r"$\Rightarrow$", "≤": r"$\leq$", "≥": r"$\geq$"}
+        text = re.sub(r"[→←↔⇒≤≥]", lambda m: self._hold(arrow_map[m.group(0)]), text)
+
         if break_long_tokens:
             text = breakify_text(text)
         text = latex_escape(text)

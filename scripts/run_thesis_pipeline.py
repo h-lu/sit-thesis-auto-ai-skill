@@ -244,6 +244,20 @@ def write_ai_review(report: dict[str, Any], path: Path) -> None:
     add_samples("正文 Overfull 样本", "paragraph_overfull_hbox")
     add_samples("表格类 Overfull 样本", "table_like_overfull_hbox")
 
+    refs = report.get("references_gb7714_2005") or {}
+    if refs:
+        lines.extend(["", "## 参考文献 GB/T 7714-2005 校验", ""])
+        lines.append(f"- 识别条目：{refs.get('normalized_count', 0)}")
+        lines.append(f"- 自动格式清理：{refs.get('changed_count', 0)} 条")
+        if refs.get("errors"):
+            lines.append("- 错误：")
+            lines.extend(f"  - {e}" for e in refs["errors"][:50])
+        if refs.get("warnings"):
+            lines.append("- 警告：")
+            lines.extend(f"  - {w}" for w in refs["warnings"][:50])
+        if not refs.get("errors") and not refs.get("warnings"):
+            lines.append("- 未发现明显格式问题。")
+
     if conversion.get("warnings"):
         lines.extend(["", "## 转换警告", ""])
         lines.extend(f"- {warning}" for warning in conversion["warnings"])
@@ -312,6 +326,16 @@ def main() -> None:
         if input_path != standard_md:
             standard_md.write_text(input_path.read_text(encoding="utf-8"), encoding="utf-8")
         report["stages"].append(StageResult("copy_standard_md", [], 0, 0.0, "", "").__dict__)
+
+    if report["stages"][-1]["returncode"] == 0:
+        gb_report_path = output_dir.parent / f"{output_dir.name}.gb7714-2005-report.json"
+        stage = run_stage(
+            "gb7714_2005_refs",
+            [sys.executable, str(SCRIPT_DIR / "gb7714_2005_refs.py"), str(standard_md), "--report", str(gb_report_path)],
+            logs_dir,
+        )
+        report["stages"].append(stage.__dict__)
+        report["references_gb7714_2005"] = load_json(gb_report_path)
 
     if report["stages"][-1]["returncode"] == 0:
         validate_cmd = [sys.executable, str(SCRIPT_DIR / "validate_standard_md.py"), str(standard_md), "--json"]

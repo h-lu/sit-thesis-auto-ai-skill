@@ -61,7 +61,11 @@
   \IfFontExistsTF{Times New Roman}{%
     \setmainfont{Times New Roman}%
   }{%
-    \IfFontExistsTF{TeX Gyre Termes}{\setmainfont{TeX Gyre Termes}}{\setmainfont{Latin Modern Roman}}%
+    \IfFontExistsTF{Liberation Serif}{%
+      \setmainfont{Liberation Serif}%
+    }{%
+      \setmainfont{Latin Modern Roman}%
+    }%
   }%
   \ifwindows
     \IfFontExistsTF{SimSun}{%
@@ -85,7 +89,12 @@
       \setCJKsansfont{SimHei}[AutoFakeBold=true]%
     }{%
       \IfFontExistsTF{Noto Sans CJK SC}{%
-        \setCJKsansfont{Noto Sans CJK SC}%
+        \setCJKsansfont{NotoSansCJK-Regular.ttc}[
+          Path = /usr/share/fonts/google-noto-cjk/,
+          FontIndex = 2,
+          BoldFont = NotoSansCJK-Bold.ttc,
+          BoldFeatures = {FontIndex = 2}
+        ]%
       }{%
         \IfFontExistsTF{Source Han Sans SC}{%
           \setCJKsansfont{Source Han Sans SC}%
@@ -126,8 +135,18 @@
       \setCJKfamilyfont{zhhei}{Heiti SC}[AutoFakeBold=true]%
     }{%
       \IfFontExistsTF{Noto Sans CJK SC}{%
-        \setCJKsansfont{Noto Sans CJK SC}%
-        \setCJKfamilyfont{zhhei}{Noto Sans CJK SC}%
+        \setCJKsansfont{NotoSansCJK-Regular.ttc}[
+          Path = /usr/share/fonts/google-noto-cjk/,
+          FontIndex = 2,
+          BoldFont = NotoSansCJK-Bold.ttc,
+          BoldFeatures = {FontIndex = 2}
+        ]%
+        \setCJKfamilyfont{zhhei}{NotoSansCJK-Regular.ttc}[
+          Path = /usr/share/fonts/google-noto-cjk/,
+          FontIndex = 2,
+          BoldFont = NotoSansCJK-Bold.ttc,
+          BoldFeatures = {FontIndex = 2}
+        ]%
       }{%
         \IfFontExistsTF{Source Han Sans SC}{%
           \setCJKsansfont{Source Han Sans SC}%
@@ -139,6 +158,55 @@
   \fi
 }
 \sit@setfonts
+
+% 服务端论文转换优先使用私有 Windows 字体文件。
+% 字体文件只放在服务器私有目录，不随 LaTeX ZIP 分发；PDF 内仅嵌入实际使用的子集。
+\IfFileExists{/opt/thesis-converter/fonts-full/times.ttf}{%
+  \setmainfont{times.ttf}[
+    Path = /opt/thesis-converter/fonts-full/,
+    BoldFont = timesbd.ttf,
+    ItalicFont = timesi.ttf,
+    BoldItalicFont = timesbd.ttf
+  ]%
+  \setmonofont{times.ttf}[
+    Path = /opt/thesis-converter/fonts-full/,
+    BoldFont = timesbd.ttf,
+    ItalicFont = timesi.ttf,
+    BoldItalicFont = timesbd.ttf
+  ]%
+}{}%
+\IfFileExists{/opt/thesis-converter/fonts-full/simsun.ttc}{%
+  \setCJKmainfont{simsun.ttc}[
+    Path = /opt/thesis-converter/fonts-full/,
+    AutoFakeBold = true,
+    AutoFakeSlant = true
+  ]%
+  \setCJKfamilyfont{zhsong}{simsun.ttc}[
+    Path = /opt/thesis-converter/fonts-full/,
+    AutoFakeBold = true,
+    AutoFakeSlant = true
+  ]%
+  \setCJKfamilyfont{zhfs}{simsun.ttc}[
+    Path = /opt/thesis-converter/fonts-full/,
+    AutoFakeBold = true,
+    AutoFakeSlant = true
+  ]%
+  \setCJKfamilyfont{zhkai}{simsun.ttc}[
+    Path = /opt/thesis-converter/fonts-full/,
+    AutoFakeBold = true,
+    AutoFakeSlant = true
+  ]%
+}{}%
+\IfFileExists{/opt/thesis-converter/fonts-full/simhei.ttf}{%
+  \setCJKsansfont{simhei.ttf}[
+    Path = /opt/thesis-converter/fonts-full/,
+    BoldFont = simhei.ttf
+  ]%
+  \setCJKfamilyfont{zhhei}{simhei.ttf}[
+    Path = /opt/thesis-converter/fonts-full/,
+    BoldFont = simhei.ttf
+  ]%
+}{}%
 
 % 中文字号：正文小四；表格/图中字体五号。
 \AtBeginDocument{\zihao{-4}\songti\setstretch{1.25}}
@@ -171,7 +239,7 @@
 \newcommand{\sit@supervisor}{}
 \newcommand{\sit@period}{}
 \newcommand{\sit@logofile}{figures/sit-logo.pdf}
-\newcommand{\sit@thesistype}{本科毕业设计(论文)}
+\newcommand{\sit@thesistype}{本科毕业设计（论文）}
 
 \newcommand{\thesistitle}[1]{\gdef\sit@title{#1}\gdef\sit@shorttitle{#1}\title{#1}\hypersetup{pdftitle={#1}}}
 \newcommand{\shorttitle}[1]{\gdef\sit@shorttitle{#1}}
@@ -253,25 +321,24 @@
 % ---------------------------
 % 目录样式：一、二、三级标题；一级加粗左对齐；二/三级分别缩进；点线连接页码。
 % ---------------------------
+
+
 \renewcommand{\contentsname}{目\quad 录}
-\titlecontents{section}
-  [0em]
-  {\zihao{-4}\songti\bfseries}
-  {\contentslabel{2.2em}}
-  {}
-  {\titlerule*[0.5pc]{.}\contentspage}
-\titlecontents{subsection}
-  [1em]
-  {\zihao{-4}\songti}
-  {\contentslabel{3.0em}}
-  {}
-  {\titlerule*[0.5pc]{.}\contentspage}
-\titlecontents{subsubsection}
-  [2em]
-  {\zihao{-4}\songti}
-  {\contentslabel{4.0em}}
-  {}
-  {\titlerule*[0.5pc]{.}\contentspage}
+% 目录格式按学校截图：列一、二、三级标题；整行逐级缩进，标题和页码用密集点线连接。
+% 自定义行输出，避免 titletoc/原生 \@dottedtocline 对编号盒做回拉导致层级缩进失效。
+\newcommand{\sit@tocdots}{\leaders\hbox{\normalfont\songti\zihao{-4}.\kern0.08em}\hfill}
+\newcommand{\sit@tocline}[4]{%
+  \par\noindent
+  \begingroup
+    \zihao{-4}\songti#2%
+    % 编号后只留一个短空格；不使用固定宽编号盒，否则 1 / 1.1 后空白过大。
+    \def\numberline##1{##1\hspace{0.75em}}%
+    \hspace*{#1}#3\nobreak\sit@tocdots\nobreak\hb@xt@\@pnumwidth{\hfil #4}%
+  \endgroup
+  \par}
+\renewcommand*{\l@section}[2]{\sit@tocline{0em}{\bfseries}{#1}{#2}}
+\renewcommand*{\l@subsection}[2]{\sit@tocline{2em}{}{#1}{#2}}
+\renewcommand*{\l@subsubsection}[2]{\sit@tocline{4em}{}{#1}{#2}}
 
 \newcommand{\maketableofcontents}{%
   \cleardoublepage
@@ -316,10 +383,26 @@
 % ---------------------------
 % 封面
 % ---------------------------
-\newcommand{\sit@coverlabel}[1]{\makebox[4em][s]{#1}}
+\newcommand{\sit@coverlabelfont}{\songti\bfseries\fontsize{20pt}{24pt}\selectfont}
+\newcommand{\sit@covervaluefont}{\songti\fontsize{20pt}{24pt}\selectfont}
+\newcommand{\sit@covertitlelabelfont}{\songti\bfseries\fontsize{22pt}{26pt}\selectfont}
+\newcommand{\sit@covertitlefont}{\songti\fontsize{22pt}{26pt}\selectfont}
+\newlength{\sit@coverlabelwidth}
+\setlength{\sit@coverlabelwidth}{3.8cm}
+\newlength{\sit@covergap}
+\setlength{\sit@covergap}{0.8em}
+\newcommand{\sit@coverlabel}[1]{\makebox[\sit@coverlabelwidth][s]{#1}}
+\newcommand{\sit@coverunderline}[2]{\underline{\makebox[#1][c]{#2}}}
 \newcommand{\sit@coverline}[2]{%
-  \noindent{\zihao{3}\heiti\sit@coverlabel{#1}}\quad
-  \underline{\makebox[10.5cm][c]{\zihao{3}\songti #2}}\par\vspace{1.1cm}%
+  \noindent{\sit@coverlabelfont\sit@coverlabel{#1}}\hspace{\sit@covergap}%
+  {\sit@covervaluefont\sit@coverunderline{10.0cm}{#2}}\par\vspace{1.1cm}%
+}
+\newcommand{\sit@covertitleline}{%
+  \noindent{\sit@covertitlelabelfont\makebox[\sit@coverlabelwidth][l]{课题名称}}\hspace{\sit@covergap}%
+  \begin{minipage}[t]{10.4cm}
+    \setstretch{1.08}\centering\sit@covertitlefont\sit@title\par
+    \vspace{0.12cm}\hrule height 0.4pt
+  \end{minipage}\par
 }
 
 \newcommand{\makecover}{%
@@ -336,21 +419,20 @@
       }%
       \vspace{1.6cm}
 
-      {\zihao{0}\heiti\sit@thesistype}\par
+      {\zihao{-0}\heiti\bfseries\sit@thesistype}\par
     \end{center}
 
     \vspace{1.8cm}
-    \noindent{\zihao{2}\heiti 课题名称:}\quad
-    \underline{\makebox[10.7cm][c]{\zihao{3}\songti\sit@title}}\par
+    \sit@covertitleline
 
     \vspace{2.1cm}
     \sit@coverline{学 院}{\sit@college}
     \sit@coverline{专 业}{\sit@major}
 
-    \noindent{\zihao{3}\heiti\sit@coverlabel{班 级}}\quad
-    \underline{\makebox[4.0cm][c]{\zihao{3}\songti\sit@classid}}\quad
-    {\zihao{3}\heiti 学号}\quad
-    \underline{\makebox[4.0cm][c]{\zihao{3}\songti\sit@studentid}}\par\vspace{1.1cm}
+    \noindent{\sit@coverlabelfont\sit@coverlabel{班 级}}\hspace{\sit@covergap}%
+    {\sit@covervaluefont\sit@coverunderline{4.0cm}{\sit@classid}}\hspace{1em}%
+    {\sit@coverlabelfont 学号}\hspace{0.7em}%
+    {\sit@covervaluefont\sit@coverunderline{4.0cm}{\sit@studentid}}\par\vspace{1.1cm}
 
     \sit@coverline{学生姓名}{\sit@studentname}
     \sit@coverline{指导教师}{\sit@supervisor}

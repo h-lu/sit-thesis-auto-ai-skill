@@ -8,7 +8,7 @@ description: 极简论文转换 skill：自动把 Word/Markdown 转成 LaTeX/PDF
 这是一个完全独立的极简 skill。它只做两件事：
 
 1. **自动转换**
-   用脚本完成 `Word/Markdown -> 标准 Markdown -> LaTeX -> PDF`。
+   用脚本完成 `Word/Markdown -> 标准 Markdown -> 参考文献 GB/T 7714-2005 规范化/校验 -> LaTeX -> PDF`。
 
 2. **AI 自动修复 LaTeX 问题**
    如果自动报告发现编译错误、缺字、正文 overfull、表格 overfull、图片缺失等问题，AI 必须立刻修复 LaTeX/模板/断行规则，并重新运行流水线验证。
@@ -41,6 +41,16 @@ python scripts/auto_thesis.py thesis.docx --output build/thesis-latex --compile
 - `scripts/word_to_standard_md.py`：Word 抽取。
 - `scripts/md_to_latex.py`：Markdown 转 LaTeX。
 - `assets/sit-latex-thesis-template/sithesis.cls`：LaTeX 模板。
+
+## 参考文献 GB/T 7714-2005
+
+流水线会在生成 LaTeX 前运行 `scripts/gb7714_2005_refs.py`：
+
+- 只做确定性格式清理和校验，不编造缺失信息。
+- 可自动统一空格、类型标识 `[J]`/`[M]`/`[EB/OL]`、标点和结尾句点等格式噪声。
+- 会检查常见 GB/T 7714-2005 结构：期刊、专著、学位论文、报告、在线资源等。
+- 缺年份、缺文献类型、在线资源缺 URL 等会写入 `*.gb7714-2005-report.json` 和 `pipeline-report.json`。
+- 缺页码、缺出版地/出版社、在线资源缺引用日期等会作为 warning；不能自动补写，需人工确认或联网查证。
 
 ## AI 介入条件
 
