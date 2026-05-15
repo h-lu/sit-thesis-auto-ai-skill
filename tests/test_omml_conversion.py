@@ -111,6 +111,11 @@ class OmmlConversionTest(unittest.TestCase):
                 ),
                 r"\left(a + b\right)",
             ),
+            (
+                "bar_without_props",
+                omath(f"<m:bar><m:e>{r('x')}</m:e></m:bar>"),
+                r"\overline{x}",
+            ),
         ]
         for name, xml, expected in cases:
             with self.subTest(name=name):

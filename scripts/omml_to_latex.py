@@ -88,6 +88,8 @@ def local_name(el) -> str:
 
 
 def attr_val(el, name: str, default: str = "") -> str:
+    if el is None:
+        return default
     return el.get(f"{{{M_NS}}}{name}") or el.get(f"{{{W_NS}}}{name}") or el.get(name) or default
 
 
