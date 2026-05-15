@@ -159,51 +159,51 @@
 }
 \sit@setfonts
 
-% 服务端论文转换优先使用私有 Windows 字体文件。
+% 服务端论文转换优先使用完整 Windows 字体文件。
 % 字体文件只放在服务器私有目录，不随 LaTeX ZIP 分发；PDF 内仅嵌入实际使用的子集。
-\IfFileExists{/opt/thesis-converter/fonts-full/times.ttf}{%
+\IfFileExists{/opt/thesis-converter/fonts-windows-full/times.ttf}{%
   \setmainfont{times.ttf}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     BoldFont = timesbd.ttf,
     ItalicFont = timesi.ttf,
     BoldItalicFont = timesbd.ttf
   ]%
   \setmonofont{times.ttf}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     BoldFont = timesbd.ttf,
     ItalicFont = timesi.ttf,
     BoldItalicFont = timesbd.ttf
   ]%
 }{}%
-\IfFileExists{/opt/thesis-converter/fonts-full/simsun.ttc}{%
+\IfFileExists{/opt/thesis-converter/fonts-windows-full/simsun.ttc}{%
   \setCJKmainfont{simsun.ttc}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     AutoFakeBold = true,
     AutoFakeSlant = true
   ]%
   \setCJKfamilyfont{zhsong}{simsun.ttc}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     AutoFakeBold = true,
     AutoFakeSlant = true
   ]%
   \setCJKfamilyfont{zhfs}{simsun.ttc}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     AutoFakeBold = true,
     AutoFakeSlant = true
   ]%
   \setCJKfamilyfont{zhkai}{simsun.ttc}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     AutoFakeBold = true,
     AutoFakeSlant = true
   ]%
 }{}%
-\IfFileExists{/opt/thesis-converter/fonts-full/simhei.ttf}{%
+\IfFileExists{/opt/thesis-converter/fonts-windows-full/simhei.ttf}{%
   \setCJKsansfont{simhei.ttf}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     BoldFont = simhei.ttf
   ]%
   \setCJKfamilyfont{zhhei}{simhei.ttf}[
-    Path = /opt/thesis-converter/fonts-full/,
+    Path = /opt/thesis-converter/fonts-windows-full/,
     BoldFont = simhei.ttf
   ]%
 }{}%
