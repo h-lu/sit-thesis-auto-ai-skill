@@ -84,6 +84,7 @@ LATEX_SPECIALS = {
 
 PLACEHOLDER_PREFIX = "@@SITPLACEHOLDER"
 ALLOWBREAK_TOKEN = "@@SITALLOWBREAK@@"
+MISSING_CAPTIONS = {"", "待补充图题", "待补充表题", "未命名表格"}
 CIRCLED_DIGIT_MAP = {
     "①": "1", "②": "2", "③": "3", "④": "4", "⑤": "5",
     "⑥": "6", "⑦": "7", "⑧": "8", "⑨": "9", "⑩": "10",
@@ -103,7 +104,22 @@ def safe_meta_tex(value: Any) -> str:
 
 
 def strip_numbered_heading(title: str) -> str:
-    return re.sub(r"^\s*\d+(?:\.\d+)*\s+", "", title).strip()
+    # Word/Pandoc sometimes emits "1.1.2研究意义" without a space after the number.
+    title = re.sub(r"^\s*\d+(?:\.\d+)+(?:\s+|(?=[^\d.\s]))", "", title)
+    title = re.sub(r"^\s*\d+\s+", "", title)
+    return title.strip()
+
+
+def heading_level_from_number(title: str, fallback: int) -> int:
+    """Use explicit heading numbers when Markdown depth disagrees with the title."""
+    m = re.match(r"^\s*(\d+(?:\.\d+)*)(?:\s+|(?=[^\d.\s]))", title)
+    if not m:
+        return fallback
+    return max(1, min(3, m.group(1).count(".") + 1))
+
+
+def has_real_caption(caption: str) -> bool:
+    return caption.strip() not in MISSING_CAPTIONS
 
 
 def strip_caption_prefix(caption: str, kind: str) -> Tuple[str, str, bool]:
@@ -301,7 +317,8 @@ class InlineConverter:
             return self._hold(num + r".\,")
         text = re.sub(r"[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]", circled_repl, text)
 
-        # Windows 宋体/黑体子集常不含箭头符号；映射为 TeX 数学符号以避免缺字。
+        # Windows 宋体/黑体子集常不含箭头/半角顿号等符号；做确定性兼容映射以避免缺字。
+        text = text.replace("､", "、")
         arrow_map = {"→": r"$\rightarrow$", "←": r"$\leftarrow$", "↔": r"$\leftrightarrow$", "⇒": r"$\Rightarrow$", "≤": r"$\leq$", "≥": r"$\geq$"}
         text = re.sub(r"[→←↔⇒≤≥]", lambda m: self._hold(arrow_map[m.group(0)]), text)
 
@@ -399,7 +416,7 @@ class BlockConverter:
         self.inline = InlineConverter(citations=True)
         self.report: Dict[str, Any] = {"figures": [], "tables": [], "equations": [], "warnings": [], "template_patches": []}
 
-    def convert_lines(self, lines: List[str]) -> str:
+    def convert_lines(self, lines: List[str], *, allow_headings: bool = True) -> str:
         lines = self.merge_semantic_continuation_tables(lines)
         out: List[str] = []
         i = 0
@@ -479,10 +496,11 @@ class BlockConverter:
                 continue
 
             m = re.match(r"^(#{1,3})\s+(.+?)\s*$", line)
-            if m:
+            if allow_headings and m:
                 flush_paragraph()
-                level = len(m.group(1))
-                title = strip_numbered_heading(m.group(2).strip())
+                raw_title = m.group(2).strip()
+                level = heading_level_from_number(raw_title, len(m.group(1)))
+                title = strip_numbered_heading(raw_title)
                 if level == 1:
                     out.append(r"\section{" + self.inline.convert(title) + "}")
                     out.append(r"\resetsubitemtitle")
@@ -643,7 +661,8 @@ class BlockConverter:
         kv = parse_key_value_block(lines)
         src = kv.get("src", "")
         caption, num, _ = strip_caption_prefix(kv.get("caption", ""), "fig")
-        label = kv.get("label", "") or slug_label("fig", caption, num)
+        explicit_label = kv.get("label", "")
+        label = explicit_label or (slug_label("fig", caption, num) if has_real_caption(caption) else "")
         return FigureBlock(src=fix_asset_path(src), caption=caption, label=label, width=kv.get("width", "0.85\\textwidth"))
 
     def parse_table_block(self, lines: List[str]) -> TableBlock:
@@ -658,14 +677,15 @@ class BlockConverter:
             else:
                 meta_lines.append(line)
         kv = parse_key_value_block(meta_lines)
-        caption, num, _ = strip_caption_prefix(kv.get("caption", "未命名表格"), "tab")
+        caption, num, _ = strip_caption_prefix(kv.get("caption", ""), "tab")
         header, rows = parse_markdown_table(table_lines)
         n = max(1, len(header))
         widths = parse_float_list(kv.get("widths", kv.get("columns", "")))
         align = parse_align_list(kv.get("align", ""), n)
+        explicit_label = kv.get("label", "")
         return TableBlock(
             caption=caption,
-            label=kv.get("label", "") or slug_label("tab", caption, num),
+            label=explicit_label or (slug_label("tab", caption, num) if has_real_caption(caption) else ""),
             header=header,
             rows=rows,
             kind=kv.get("type", kv.get("kind", "auto")).lower(),
@@ -697,9 +717,12 @@ class BlockConverter:
             self.report["warnings"].append(f"图片不存在：{fig.src}")
         self.report["figures"].append({"src": fig.src, "caption": fig.caption, "label": fig.label})
         parts = [r"\begin{figure}[htbp]", r"  \centering"]
-        parts.append(r"  \includegraphics[width=" + fig.width + "]{" + latex_path(fig.src) + "}")
-        parts.append(r"  \caption{" + self.inline.convert(fig.caption) + "}")
-        if fig.label:
+        parts.append(r"  \includegraphics[width=" + fig.width + r",height=0.72\textheight,keepaspectratio]{" + latex_path(fig.src) + "}")
+        if has_real_caption(fig.caption):
+            parts.append(r"  \caption{" + self.inline.convert(fig.caption) + "}")
+        else:
+            self.report["warnings"].append("图片缺少题注，已不生成可见占位图题")
+        if fig.label and has_real_caption(fig.caption):
             parts.append(r"  \label{" + fig.label + "}")
         parts.append(r"\end{figure}")
         return "\n".join(parts)
@@ -751,11 +774,72 @@ class BlockConverter:
         return "".join(specs)
 
     def cell(self, text: str) -> str:
-        return self.inline.convert(str(text).strip(), break_long_tokens=True)
+        raw = str(text).strip()
+        converted = self.inline.convert(raw, break_long_tokens=True)
+        # A tabular row cell beginning with "[" can be parsed as an optional
+        # argument to a preceding rule/line break. Prefix an empty group so
+        # survey options like "[ ]A 操作便捷性" remain literal cell text.
+        if raw.startswith("["):
+            return "{}" + converted
+        return converted
+
+    def looks_like_code_table(self, table: TableBlock) -> bool:
+        if has_real_caption(table.caption):
+            return False
+        n = max(1, len(table.header))
+        if n != 1 or table.rows:
+            return False
+        text = table.header[0].strip()
+        if len(text) < 80:
+            return False
+        return bool(re.search(
+            r"\b(import|def|class|function|const|let|var|return|CREATE\s+TABLE|SELECT|INSERT|UPDATE|DELETE)\b|"
+            r"(cursor|conn|sqlite3|execute)\s*[.(]",
+            text,
+            flags=re.IGNORECASE,
+        ))
+
+    def code_lines_from_flat_text(self, text: str) -> List[str]:
+        s = re.sub(r"\s+", " ", text.strip())
+        replacements = [
+            (r"\s+(def\s+\w+\s*\()", r"\n\1"),
+            (r"\s+(class\s+\w+)", r"\n\1"),
+            (r"\s+(conn\s*=)", r"\n\1"),
+            (r"\s+(cursor\s*=)", r"\n\1"),
+            (r"\s+(cursor\.execute\s*\()", r"\n\1"),
+            (r"\s+(conn\.commit\s*\()", r"\n\1"),
+            (r"\s+(conn\.close\s*\()", r"\n\1"),
+            (r"\s+#\s+", r"\n# "),
+            (r"\s+(CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS)", r"\n    \1"),
+            (r"\s+([a-zA-Z_][a-zA-Z0-9_]*\s+(?:INTEGER|TEXT|REAL|TIMESTAMP|PRIMARY|FOREIGN|DEFAULT|NOT\s+NULL))", r"\n        \1"),
+            (r"\s+(FOREIGN\s+KEY\s*\()", r"\n        \1"),
+            (r"\s+(\)'''\))", r"\n    \1"),
+        ]
+        for pattern, repl in replacements:
+            s = re.sub(pattern, repl, s, flags=re.IGNORECASE)
+        lines: List[str] = []
+        for line in s.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            wrapped = textwrap.wrap(line, width=88, break_long_words=False, break_on_hyphens=False) or [line]
+            lines.extend(wrapped)
+        return lines
+
+    def render_code_table(self, table: TableBlock) -> str:
+        self.report["warnings"].append("疑似代码被 Word 抽取为单列表格，已按代码块渲染")
+        lines = self.code_lines_from_flat_text(table.header[0])
+        out = [r"\begin{quote}", r"\footnotesize\ttfamily\raggedright"]
+        for line in lines:
+            out.append(latex_escape(line) + r"\par")
+        out.append(r"\end{quote}")
+        return "\n".join(out)
 
     def render_table(self, table: TableBlock) -> str:
         n = max(1, len(table.header))
         table.rows = [normalize_row(row, n) for row in table.rows]
+        if self.looks_like_code_table(table):
+            return self.render_code_table(table)
         use_long = self.choose_table_kind(table)
         widths = self.auto_widths(table, use_long)
         max_cell = max([len(c) for c in table.header] + [len(c) for row in table.rows for c in row] + [0])
@@ -777,8 +861,12 @@ class BlockConverter:
     def render_float_table(self, table: TableBlock, widths: List[float]) -> str:
         colspec = self.colspec(widths, table.align)
         fontcmd = ("\\" + table.fontsize) if table.fontsize else ""
-        out = [r"\begin{table}[htbp]", r"  \caption{" + self.inline.convert(table.caption) + "}"]
-        if table.label:
+        out = [r"\begin{table}[htbp]"]
+        if has_real_caption(table.caption):
+            out.append(r"  \caption{" + self.inline.convert(table.caption) + "}")
+        else:
+            self.report["warnings"].append("表格缺少题注，已不生成可见占位表题")
+        if table.label and has_real_caption(table.caption):
             out.append(r"  \label{" + table.label + "}")
         out.extend([r"  \centering", r"  \begingroup", r"  \setlength{\tabcolsep}{3pt}"])
         if fontcmd:
@@ -800,25 +888,20 @@ class BlockConverter:
         out = [r"\begingroup", r"\setlength{\tabcolsep}{3pt}", r"\setlength{\LTleft}{0pt}", r"\setlength{\LTright}{0pt}"]
         if fontcmd:
             out.append(fontcmd)
-        out.append(r"\refstepcounter{table}")
-        if table.label:
-            out.append(r"\label{" + table.label + "}")
+        captioned = has_real_caption(table.caption)
+        if not captioned:
+            self.report["warnings"].append("表格缺少题注，已不生成可见占位表题")
         out.append(r"\begin{longtable}{" + colspec + "}")
-        out.append(
-            r"  \multicolumn{" + str(n) + r"}{c}{\zihao{5}\heiti 表\thetable\quad "
-            + self.inline.convert(table.caption)
-            + r"}\\"
-        )
+        if captioned:
+            label_tex = (r"\label{" + table.label + "}") if table.label else ""
+            out.append(r"  \caption{" + self.inline.convert(table.caption) + label_tex + r"}\\")
         out.append(r"  \toprule")
         out.append("  " + header_tex)
         out.append(r"  \midrule")
         out.append(r"  \endfirsthead")
         # 续页只在 LaTeX 内部自动出现；Markdown 仍只有一个逻辑表。
-        out.append(
-            r"  \multicolumn{" + str(n) + r"}{c}{\zihao{5}\heiti 表\thetable\quad "
-            + self.inline.convert(table.caption)
-            + r"（续）}\\"
-        )
+        if captioned:
+            out.append(r"  \caption[]{" + self.inline.convert(table.caption) + r"（续）}\\")
         out.append(r"  \toprule")
         out.append("  " + header_tex)
         out.append(r"  \midrule")
@@ -863,7 +946,7 @@ def generate_main_tex(parts: DocumentParts, md_dir: Path) -> Tuple[str, Dict[str
     converter = BlockConverter(md_dir)
     body_tex = converter.convert_lines(parts.body_lines)
     ack_tex = converter.convert_lines(parts.acknowledgements) if parts.acknowledgements else ""
-    appendix_tex = converter.convert_lines(parts.appendix) if parts.appendix else ""
+    appendix_tex = converter.convert_lines(parts.appendix, allow_headings=False) if parts.appendix else ""
 
     bib_lines: List[str] = []
     ref_inline = InlineConverter(citations=False)

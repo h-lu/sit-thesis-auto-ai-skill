@@ -26,7 +26,10 @@ DATE_RE = re.compile(r"\[(?:19|20)\d{2}[-./年](?:0?[1-9]|1[0-2])[-./月](?:0?[1
 PAGES_RE = re.compile(r"[:：]\s*\d+(?:\s*[-–—]\s*\d+)?")
 VOL_ISSUE_RE = re.compile(r"[,，]\s*\d+\s*(?:\(\s*[^)]+\s*\))?\s*[:：]")
 
-SUPPORTED_TYPES = {"J", "M", "D", "R", "S", "S/OL", "EB/OL", "OL", "C", "N", "P"}
+SUPPORTED_TYPES = {
+    "J", "J/OL", "M", "M/OL", "D", "D/OL", "R", "R/OL",
+    "S", "S/OL", "EB/OL", "OL", "C", "C/OL", "N", "N/OL", "P", "P/OL",
+}
 
 
 @dataclass
@@ -111,7 +114,8 @@ def normalize_text(text: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     for i, url in enumerate(urls):
         s = s.replace(f"@@URL{i}@@", url)
-    if s and s[-1] not in ".。":
+    s = re.sub(r"([。．])\.+$", r"\1", s)
+    if s and s[-1] not in ".。．":
         s += "."
     return s
 
@@ -139,11 +143,11 @@ def validate_ref(num: int, text: str, rtype: str | None) -> tuple[list[str], lis
         errors.append(f"{prefix} 缺少年份")
 
     # GB/T 7714-2005 基本结构校验：只报缺失，不自动补写。
-    if rtype == "J":
+    if rtype in {"J", "J/OL"}:
         if not PAGES_RE.search(text):
-            warnings.append(f"{prefix} 期刊 [J] 未检测到页码/文章编号 ': 起止页'")
+            warnings.append(f"{prefix} 期刊 [{rtype}] 未检测到页码/文章编号 ': 起止页'")
         if not re.search(r"[,，]\s*(?:19|20)\d{2}\s*[,，]", text):
-            warnings.append(f"{prefix} 期刊 [J] 未检测到 '刊名, 年, 卷(期): 页码' 结构")
+            warnings.append(f"{prefix} 期刊 [{rtype}] 未检测到 '刊名, 年, 卷(期): 页码' 结构")
     elif rtype == "M":
         if ":" not in text:
             warnings.append(f"{prefix} 专著 [M] 未检测到出版地/出版社分隔 ':'")
@@ -157,7 +161,7 @@ def validate_ref(num: int, text: str, rtype: str | None) -> tuple[list[str], lis
     elif rtype == "R":
         if not has_year(text):
             errors.append(f"{prefix} 报告 [R] 缺少年份")
-    elif rtype in {"EB/OL", "S/OL", "OL"}:
+    elif rtype in {"EB/OL", "S/OL", "OL"} or rtype.endswith("/OL"):
         if not URL_RE.search(text):
             errors.append(f"{prefix} 在线资源 [{rtype}] 缺少 URL")
         if not DATE_RE.search(text):

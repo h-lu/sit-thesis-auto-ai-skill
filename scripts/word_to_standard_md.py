@@ -308,6 +308,24 @@ def serialize_items(items: List[Any]) -> List[str]:
     return out
 
 
+def ensure_unique_labels(lines: List[str]) -> List[str]:
+    seen: dict[str, int] = {}
+    out: List[str] = []
+    for line in lines:
+        m = re.match(r"^(\s*label\s*:\s*)(\S+)(\s*)$", line)
+        if not m:
+            out.append(line)
+            continue
+        label = m.group(2)
+        count = seen.get(label, 0) + 1
+        seen[label] = count
+        if count == 1:
+            out.append(line)
+        else:
+            out.append(f"{m.group(1)}{label}-{count}{m.group(3)}")
+    return out
+
+
 
 def parse_keywords_line(line: str) -> List[str]:
     value = re.sub(r"^\s*(关键词|Key\s*Words|Keywords)\s*[:：]", "", line.strip(), flags=re.I)
@@ -325,15 +343,38 @@ def extract_after_label(line: str, label: str) -> str:
     return ""
 
 
+def looks_like_cover_field(line: str) -> bool:
+    c = compact_text(line)
+    return bool(re.match(
+        r"^(本科毕业设计|毕业设计|学院|专业|班级|学号|学生姓名|指导教师|起止日期|作者签名|日期|毕业设计（论文）独创性声明|摘要|关键词|Abstract|KeyWords|Keywords)",
+        c,
+        flags=re.I,
+    ))
+
+
+def maybe_update_title(meta: dict[str, Any], title: str) -> None:
+    title = re.sub(r"[\s　]+", "", title.strip())
+    if not title:
+        return
+    current = str(meta.get("title", "") or "")
+    if not current or len(title) > len(current):
+        meta["title"] = title
+        meta["short_title"] = title
+
+
 def fill_meta_from_lines(lines: List[str], meta: dict[str, Any]) -> None:
     """Fill cover/declaration/abstract fields from plain paragraph lines."""
     plain = [l.strip() for l in lines if l.strip() and not l.strip().startswith(":::") and not l.strip().startswith("|")]
 
-    for line in plain[:120]:
+    for idx, line in enumerate(plain[:120]):
         value = extract_after_label(line, "课题名称")
         if value and not meta.get("title"):
-            meta["title"] = value
-            meta["short_title"] = value
+            title_parts = [value]
+            for nxt in plain[idx + 1 : min(idx + 4, len(plain))]:
+                if looks_like_cover_field(nxt):
+                    break
+                title_parts.append(nxt.strip())
+            maybe_update_title(meta, "".join(title_parts))
         value = extract_after_label(line, "学院")
         if value and not meta.get("college"):
             meta["college"] = value
@@ -378,6 +419,11 @@ def fill_meta_from_lines(lines: List[str], meta: dict[str, Any]) -> None:
             cn_parts.append(s)
     if cn_parts:
         meta.setdefault("abstract", {})["cn"] = "".join(cn_parts).strip()
+        idx = next((i for i, line in enumerate(plain) if re.match(r"^摘要\s*[:：]", line.strip())), -1)
+        if idx > 0:
+            prev = plain[idx - 1].strip()
+            if not looks_like_cover_field(prev):
+                maybe_update_title(meta, prev)
 
     # English abstract: line immediately before Abstract is usually the English title.
     for idx, line in enumerate(plain):
@@ -643,7 +689,9 @@ def main() -> None:
     flush_pending_caption()
     merged, merged_count = merge_continuation_tables(items)
     lines = serialize_items(merged)
+    lines = ensure_unique_labels(lines)
     lines = postprocess_standard_lines(lines, meta)
+    lines = ensure_unique_labels(lines)
 
     out = "---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False).strip() + "\n---\n\n"
     out += "\n".join(lines).strip() + "\n"

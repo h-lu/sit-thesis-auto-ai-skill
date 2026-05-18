@@ -116,7 +116,7 @@ def validate(md_path: Path) -> dict[str, Any]:
 
     duplicated = [k for k, n in labels.items() if n > 1]
     if duplicated:
-        errors.append("label 重复：" + ", ".join(sorted(duplicated)))
+        warnings.append("label 重复：" + ", ".join(sorted(duplicated)) + "；已允许继续生成 PDF，请人工核对相关图表/公式引用。")
 
     return {
         "file": str(md_path),
